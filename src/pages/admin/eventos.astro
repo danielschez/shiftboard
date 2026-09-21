@@ -1,0 +1,107 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+const isSuperAdmin = Astro.locals.role === 'super_admin';
+
+const { data: collaborators } = await Astro.locals.supabase
+  .from('collaborators')
+  .select('id, full_name, shifts(name)')
+  .eq('active', true)
+  .order('full_name');
+
+const { data: eventTypes } = await Astro.locals.supabase
+  .from('event_types')
+  .select('id, code, label, color, blocks_coverage, requires_notice')
+  .order('label');
+
+const { data: settings } = await Astro.locals.supabase
+  .from('app_settings')
+  .select('min_notice_days')
+  .single();
+const minNoticeDays = settings?.min_notice_days ?? 15;
+
+const todayISO = new Date().toISOString().slice(0, 10);
+const { data: upcoming } = await Astro.locals.supabase
+  .from('events')
+  .select('id, start_date, end_date, note, justification, created_by_name, collaborators(full_name), event_types(label, color)')
+  .gte('end_date', todayISO)
+  .order('start_date')
+  .limit(30);
+---
+<AdminLayout title="Eventos" active="eventos">
+  <h1>Eventos</h1>
+
+  {error && <div class="alert error">{decodeURIComponent(error)}</div>}
+  {ok && <div class="alert ok">Evento registrado correctamente.</div>}
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="margin-bottom:14px">Registrar evento</h2>
+    <form method="POST" action="/api/admin/events">
+      <div class="field">
+        <label for="event_type_id">Tipo de evento</label>
+        <select id="event_type_id" name="event_type_id" required>
+          {(eventTypes ?? []).map((t) => (
+            <option value={t.id}>{t.label}{t.code === 'festivo' ? ' (aplica a todos)' : ''}</option>
+          ))}
+        </select>
+      </div>
+      <div class="field">
+        <label for="collaborator_id">Colaborador (dejar vacío si es festivo general)</label>
+        <select id="collaborator_id" name="collaborator_id">
+          <option value="">— General / no aplica —</option>
+          {(collaborators ?? []).map((c: any) => (
+            <option value={c.id}>{c.full_name} ({c.shifts?.name})</option>
+          ))}
+        </select>
+      </div>
+      <div class="field">
+        <label for="start_date">Desde</label>
+        <input type="date" id="start_date" name="start_date" required />
+      </div>
+      <div class="field">
+        <label for="end_date">Hasta</label>
+        <input type="date" id="end_date" name="end_date" required />
+      </div>
+      <div class="field">
+        <label for="note">Nota (opcional)</label>
+        <input type="text" id="note" name="note" />
+      </div>
+      <div class="field">
+        <label for="justification">
+          Justificación — obligatoria si el evento se registra con menos de {minNoticeDays} días de anticipación
+          (vacaciones, trámites y paternidad)
+        </label>
+        <textarea id="justification" name="justification" rows="2" placeholder="Motivo del permiso con tan poca anticipación"></textarea>
+      </div>
+      <button type="submit" class="btn">Registrar</button>
+    </form>
+  </div>
+
+  <h2>Próximos eventos</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Colaborador</th><th>Tipo</th><th>Fechas</th><th>Dado de alta por</th>{isSuperAdmin && <th></th>}</tr>
+      </thead>
+      <tbody>
+        {(upcoming ?? []).map((e: any) => (
+          <tr>
+            <td>{e.collaborators?.full_name ?? 'General'}</td>
+            <td><span class="tag"><span class="dot" style={`background:${e.event_types?.color}`}></span>{e.event_types?.label}</span></td>
+            <td>{e.start_date}{e.end_date !== e.start_date ? ` → ${e.end_date}` : ''}</td>
+            <td style="color:var(--ink-muted);font-size:0.85rem">{e.created_by_name ?? '—'}</td>
+            {isSuperAdmin && (
+              <td style="text-align:right">
+                <form method="POST" action={`/api/admin/events/${e.id}/delete`} style="display:inline">
+                  <button type="submit" class="btn danger" style="padding:5px 10px;font-size:0.82rem">Eliminar</button>
+                </form>
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

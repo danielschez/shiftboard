@@ -1,0 +1,72 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+
+const { data: shifts } = await Astro.locals.supabase
+  .from('shifts')
+  .select('id, name, start_time, end_time')
+  .order('start_time');
+
+// Cuenta colaboradores activos por turno, para que el admin vea de un
+// vistazo cuánta gente hay cubriendo cada horario.
+const { data: collaborators } = await Astro.locals.supabase
+  .from('collaborators')
+  .select('shift_id, active');
+
+function activeCount(shiftId: string) {
+  return (collaborators ?? []).filter((c) => c.shift_id === shiftId && c.active).length;
+}
+---
+<AdminLayout title="Turnos" active="turnos">
+  <h1>Turnos</h1>
+  <p style="color:var(--ink-muted);margin-top:-8px">
+    Los horarios de cobertura usados para validar permisos.
+  </p>
+
+  {error && <div class="alert error">{decodeURIComponent(error)}</div>}
+  {ok && <div class="alert ok">Guardado correctamente.</div>}
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="margin-bottom:14px">Agregar turno</h2>
+    <form method="POST" action="/api/admin/shifts">
+      <div class="field">
+        <label for="name">Nombre</label>
+        <input type="text" id="name" name="name" placeholder="Ej. 6am-3pm" required />
+      </div>
+      <div class="field">
+        <label for="start_time">Hora de inicio</label>
+        <input type="time" id="start_time" name="start_time" required />
+      </div>
+      <div class="field">
+        <label for="end_time">Hora de fin</label>
+        <input type="time" id="end_time" name="end_time" required />
+      </div>
+      <button type="submit" class="btn">Agregar turno</button>
+    </form>
+  </div>
+
+  <h2>Turnos configurados</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Nombre</th><th>Horario</th><th>Colaboradores activos</th><th></th></tr>
+      </thead>
+      <tbody>
+        {(shifts ?? []).map((s) => (
+          <tr>
+            <td>{s.name}</td>
+            <td>{s.start_time}–{s.end_time}</td>
+            <td>{activeCount(s.id)}</td>
+            <td style="text-align:right">
+              <form method="POST" action={`/api/admin/shifts/${s.id}/delete`} style="display:inline">
+                <button type="submit" class="btn danger" style="padding:5px 10px;font-size:0.82rem">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

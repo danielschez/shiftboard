@@ -1,0 +1,74 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { addMonths, monthLabel } from '../../lib/calendar';
+
+const today = new Date();
+const year = Number(Astro.url.searchParams.get('y')) || today.getFullYear();
+const month = Number(Astro.url.searchParams.get('m')) || today.getMonth() + 1;
+
+const rangeStart = `${year}-${String(month).padStart(2, '0')}-01`;
+const lastDay = new Date(year, month, 0).getDate();
+const rangeEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+const { data: rows } = await Astro.locals.supabase
+  .from('events')
+  .select('id, start_date, end_date, justification, note, created_by_name, created_at, collaborators(full_name), event_types(label, color)')
+  .gte('start_date', rangeStart)
+  .lte('start_date', rangeEnd)
+  .order('created_at', { ascending: false });
+
+const prev = addMonths(year, month, -1);
+const next = addMonths(year, month, 1);
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+}
+---
+<AdminLayout title="Historial" active="historial">
+  <h1>Historial de eventos</h1>
+  <p style="color:var(--ink-muted);margin-top:-8px">
+    Quién dio de alta cada evento, cuándo, y con qué justificación.
+  </p>
+
+  <div class="month-nav">
+    <a class="btn secondary" href={`/admin/historial?y=${prev.year}&m=${prev.month}`}>&larr; anterior</a>
+    <span class="month-label">{monthLabel(year, month)}</span>
+    <div>
+      <a class="btn secondary" href={`/admin/historial?y=${next.year}&m=${next.month}`}>siguiente &rarr;</a>
+      <a class="btn" href={`/api/admin/historial/export?y=${year}&m=${month}`} style="margin-left:8px">
+        Exportar a Excel
+      </a>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Colaborador</th>
+          <th>Tipo</th>
+          <th>Fechas</th>
+          <th>Justificación</th>
+          <th>Dado de alta por</th>
+          <th>Fecha y hora de alta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(rows ?? []).length === 0 && (
+          <tr><td colspan="6" style="color:var(--ink-muted)">Sin eventos en este mes.</td></tr>
+        )}
+        {(rows ?? []).map((e: any) => (
+          <tr>
+            <td>{e.collaborators?.full_name ?? 'General'}</td>
+            <td><span class="tag"><span class="dot" style={`background:${e.event_types?.color}`}></span>{e.event_types?.label}</span></td>
+            <td>{e.start_date}{e.end_date !== e.start_date ? ` → ${e.end_date}` : ''}</td>
+            <td style="font-size:0.85rem">{e.justification ?? '—'}</td>
+            <td style="font-size:0.85rem">{e.created_by_name ?? '—'}</td>
+            <td style="font-size:0.85rem;font-family:var(--font-mono)">{formatDateTime(e.created_at)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

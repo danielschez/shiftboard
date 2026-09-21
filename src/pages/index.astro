@@ -1,0 +1,78 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { buildMonthGrid, monthLabel, dayOfWeekLabels, toISODate, addMonths } from '../lib/calendar';
+
+const today = new Date();
+const year = Number(Astro.url.searchParams.get('y')) || today.getFullYear();
+const month = Number(Astro.url.searchParams.get('m')) || today.getMonth() + 1;
+
+const grid = buildMonthGrid(year, month);
+const rangeStart = toISODate(grid[0]);
+const rangeEnd = toISODate(grid[grid.length - 1]);
+
+const { data: eventTypes } = await Astro.locals.supabase
+  .from('event_types')
+  .select('id, code, label, color');
+
+const { data: events } = await Astro.locals.supabase
+  .from('events')
+  .select('id, start_date, end_date, collaborator_id, event_type_id, collaborators(full_name), event_types(label, color)')
+  .lte('start_date', rangeEnd)
+  .gte('end_date', rangeStart)
+  .eq('status', 'aprobado');
+
+function eventsForDay(iso: string) {
+  return (events ?? []).filter((e: any) => iso >= e.start_date && iso <= e.end_date);
+}
+
+const prev = addMonths(year, month, -1);
+const next = addMonths(year, month, 1);
+---
+<Layout title="Calendario de colaboradores">
+  <div class="shell">
+    <div class="topbar">
+      <span class="brand">Calendario de colaboradores</span>
+      <nav>
+        <a href="/admin">Panel admin</a>
+      </nav>
+    </div>
+
+    <div class="month-nav">
+      <a class="btn secondary" href={`/?y=${prev.year}&m=${prev.month}`}>&larr; anterior</a>
+      <span class="month-label">{monthLabel(year, month)}</span>
+      <a class="btn secondary" href={`/?y=${next.year}&m=${next.month}`}>siguiente &rarr;</a>
+    </div>
+
+    <div class="calendar-grid">
+      {dayOfWeekLabels.map((d) => <div class="dow">{d}</div>)}
+      {grid.map((date) => {
+        const iso = toISODate(date);
+        const isOutside = date.getMonth() + 1 !== month;
+        const dayEvents = eventsForDay(iso);
+        return (
+          <div class={`day-cell ${isOutside ? 'outside' : ''}`}>
+            <div class="num">{date.getDate()}</div>
+            <div class="events">
+              {dayEvents.slice(0, 4).map((e: any) => (
+                <div
+                  class="event-chip"
+                  style={`background:${e.event_types?.color ?? '#999'}`}
+                  title={`${e.event_types?.label ?? ''} — ${e.collaborators?.full_name ?? 'General'}`}
+                >
+                  {e.collaborators?.full_name ?? e.event_types?.label}
+                </div>
+              ))}
+              {dayEvents.length > 4 && <div class="event-chip" style="background:#8a8577">+{dayEvents.length - 4} más</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    <div class="legend">
+      {(eventTypes ?? []).map((t) => (
+        <span class="tag"><span class="dot" style={`background:${t.color}`}></span>{t.label}</span>
+      ))}
+    </div>
+  </div>
+</Layout>

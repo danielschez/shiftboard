@@ -1,0 +1,69 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+
+const { data: shifts } = await Astro.locals.supabase
+  .from('shifts')
+  .select('id, name, start_time, end_time')
+  .order('start_time');
+
+const { data: collaborators } = await Astro.locals.supabase
+  .from('collaborators')
+  .select('id, full_name, active, shifts(name, start_time, end_time)')
+  .order('full_name');
+---
+<AdminLayout title="Colaboradores" active="colaboradores">
+  <h1>Colaboradores</h1>
+
+  {error && <div class="alert error">{decodeURIComponent(error)}</div>}
+  {ok && <div class="alert ok">Guardado correctamente.</div>}
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="margin-bottom:14px">Dar de alta</h2>
+    <form method="POST" action="/api/admin/collaborators">
+      <div class="field">
+        <label for="full_name">Nombre completo</label>
+        <input type="text" id="full_name" name="full_name" required />
+      </div>
+      <div class="field">
+        <label for="shift_id">Turno</label>
+        <select id="shift_id" name="shift_id" required>
+          {(shifts ?? []).map((s) => (
+            <option value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>
+          ))}
+        </select>
+      </div>
+      <button type="submit" class="btn">Agregar colaborador</button>
+    </form>
+  </div>
+
+  <h2>Todos</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Nombre</th><th>Turno</th><th>Estado</th><th></th></tr>
+      </thead>
+      <tbody>
+        {(collaborators ?? []).map((c: any) => (
+          <tr>
+            <td>{c.full_name}</td>
+            <td>{c.shifts?.name} ({c.shifts?.start_time}–{c.shifts?.end_time})</td>
+            <td>{c.active ? 'Activo' : 'Inactivo'}</td>
+            <td style="text-align:right">
+              <form method="POST" action={`/api/admin/collaborators/${c.id}/toggle`} style="display:inline">
+                <button type="submit" class="btn secondary" style="padding:5px 10px;font-size:0.82rem">
+                  {c.active ? 'Desactivar' : 'Activar'}
+                </button>
+              </form>
+              <form method="POST" action={`/api/admin/collaborators/${c.id}/delete`} style="display:inline">
+                <button type="submit" class="btn danger" style="padding:5px 10px;font-size:0.82rem">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

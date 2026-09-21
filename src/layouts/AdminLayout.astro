@@ -1,0 +1,56 @@
+---
+import Layout from './Layout.astro';
+
+interface Props {
+  title: string;
+  active: 'dashboard' | 'colaboradores' | 'turnos' | 'eventos' | 'historial' | 'usuarios' | 'ajustes';
+}
+const { title, active } = Astro.props;
+const role = Astro.locals.role;
+const isSuperAdmin = role === 'super_admin';
+
+const links = [
+  { key: 'dashboard', href: '/admin', label: 'Resumen', superAdminOnly: false },
+  { key: 'eventos', href: '/admin/eventos', label: 'Eventos', superAdminOnly: false },
+  { key: 'colaboradores', href: '/admin/colaboradores', label: 'Colaboradores', superAdminOnly: true },
+  { key: 'turnos', href: '/admin/turnos', label: 'Turnos', superAdminOnly: true },
+  { key: 'historial', href: '/admin/historial', label: 'Historial', superAdminOnly: true },
+  { key: 'usuarios', href: '/admin/usuarios', label: 'Usuarios', superAdminOnly: true },
+  { key: 'ajustes', href: '/admin/ajustes', label: 'Ajustes', superAdminOnly: true },
+].filter((l) => !l.superAdminOnly || isSuperAdmin);
+---
+<Layout title={`${title} · Admin`}>
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <a href="/admin" class="admin-brand">
+        <span class="brand-mark">📅</span>
+        <span>Calendario</span>
+        <span class={`role-badge ${isSuperAdmin ? 'super' : ''}`}>{isSuperAdmin ? 'super admin' : 'admin'}</span>
+      </a>
+
+      <nav class="admin-nav">
+        {links.map((l) => (
+          <a href={l.href} class={active === l.key ? 'active' : ''}>{l.label}</a>
+        ))}
+      </nav>
+
+      <div class="admin-header-actions">
+        <a href="/" class="header-link">Ver calendario público</a>
+        <form method="POST" action="/api/auth/logout">
+          <button type="submit" class="logout-btn" title="Cerrar sesión">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Salir
+          </button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell" style="padding-top:0">
+    <slot />
+  </div>
+</Layout>

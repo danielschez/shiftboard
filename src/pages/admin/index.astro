@@ -1,0 +1,89 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const isSuperAdmin = Astro.locals.role === 'super_admin';
+const myName =
+  (Astro.locals.user?.user_metadata?.full_name as string | undefined) ?? Astro.locals.user?.email ?? '';
+
+const { count: totalColaboradores } = await Astro.locals.supabase
+  .from('collaborators')
+  .select('*', { count: 'exact', head: true })
+  .eq('active', true);
+
+const { count: totalShifts } = await Astro.locals.supabase
+  .from('shifts')
+  .select('*', { count: 'exact', head: true });
+
+const todayISO = new Date().toISOString().slice(0, 10);
+const in7 = new Date();
+in7.setDate(in7.getDate() + 7);
+const in7ISO = in7.toISOString().slice(0, 10);
+
+const { data: eventosHoy } = await Astro.locals.supabase
+  .from('events')
+  .select('id, note, collaborators(full_name), event_types(label, color)')
+  .lte('start_date', todayISO)
+  .gte('end_date', todayISO)
+  .eq('status', 'aprobado');
+
+const { count: proximos7 } = await Astro.locals.supabase
+  .from('events')
+  .select('*', { count: 'exact', head: true })
+  .gte('start_date', todayISO)
+  .lte('start_date', in7ISO)
+  .eq('status', 'aprobado');
+
+const quickLinks = [
+  { href: '/admin/eventos', title: 'Registrar evento', desc: 'Vacaciones, trámites, cumpleaños, festivos', show: true },
+  { href: '/admin/colaboradores', title: 'Colaboradores', desc: 'Alta y turno asignado', show: isSuperAdmin },
+  { href: '/admin/turnos', title: 'Turnos', desc: 'Horarios y cobertura', show: isSuperAdmin },
+  { href: '/admin/historial', title: 'Historial', desc: 'Auditoría y exportar a Excel', show: isSuperAdmin },
+  { href: '/admin/usuarios', title: 'Usuarios', desc: 'Roles y accesos al panel', show: isSuperAdmin },
+  { href: '/admin/ajustes', title: 'Ajustes', desc: 'Días de anticipación mínimos', show: isSuperAdmin },
+].filter((l) => l.show);
+---
+<AdminLayout title="Resumen" active="dashboard">
+  <h1>Hola, {myName.split('@')[0]}</h1>
+  <p style="color:var(--ink-muted);margin-top:-8px">Esto es lo que está pasando hoy.</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value">{totalColaboradores ?? 0}</div>
+      <div class="stat-label">Colaboradores activos</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{totalShifts ?? 0}</div>
+      <div class="stat-label">Turnos configurados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{(eventosHoy ?? []).length}</div>
+      <div class="stat-label">Eventos activos hoy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{proximos7 ?? 0}</div>
+      <div class="stat-label">Eventos en los próximos 7 días</div>
+    </div>
+  </div>
+
+  <div class="quick-links">
+    {quickLinks.map((l) => (
+      <a class="quick-link" href={l.href}>
+        <div class="ql-title">{l.title}</div>
+        <div class="ql-desc">{l.desc}</div>
+      </a>
+    ))}
+  </div>
+
+  <div class="section-title"><h2>Eventos activos hoy</h2></div>
+  <div class="card">
+    {(eventosHoy ?? []).length === 0 && <p style="color:var(--ink-muted)">Sin eventos registrados para hoy.</p>}
+    <div class="event-list">
+      {(eventosHoy ?? []).map((e: any) => (
+        <div class="event-list-item" style={`border-left-color:${e.event_types?.color}`}>
+          <span class="who">{e.collaborators?.full_name ?? 'General'}</span>
+          <span class="what">{e.event_types?.label}{e.note ? ` · ${e.note}` : ''}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</AdminLayout>

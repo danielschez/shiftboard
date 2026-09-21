@@ -1,0 +1,87 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+const myId = Astro.locals.user?.id;
+
+const { data: profiles } = await Astro.locals.supabase
+  .from('profiles')
+  .select('id, email, full_name, role')
+  .order('email');
+---
+<AdminLayout title="Usuarios" active="usuarios">
+  <h1>Usuarios del admin</h1>
+  <p style="color:var(--ink-muted);margin-top:-8px">
+    Crea, edita el rol o resetea la contraseña de quienes entran a este panel.
+  </p>
+
+  {error && <div class="alert error">{decodeURIComponent(error)}</div>}
+  {ok && <div class="alert ok">Cambios guardados.</div>}
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="margin-bottom:14px">Agregar usuario</h2>
+    <form method="POST" action="/api/admin/users">
+      <div class="field">
+        <label for="new_full_name">Nombre completo</label>
+        <input type="text" id="new_full_name" name="full_name" required />
+      </div>
+      <div class="field">
+        <label for="new_email">Correo</label>
+        <input type="email" id="new_email" name="email" required />
+      </div>
+      <div class="field">
+        <label for="new_password">Contraseña</label>
+        <input type="password" id="new_password" name="password" minlength="8" required />
+      </div>
+      <div class="field">
+        <label for="new_role">Rol</label>
+        <select id="new_role" name="role" required>
+          <option value="admin">admin — solo da de alta eventos</option>
+          <option value="super_admin">super_admin — acceso total</option>
+        </select>
+      </div>
+      <button type="submit" class="btn">Crear usuario</button>
+    </form>
+  </div>
+
+  <h2>Usuarios existentes</h2>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    {(profiles ?? []).map((p: any) => {
+      const isMe = p.id === myId;
+      return (
+        <div class="card user-row">
+          <form method="POST" action={`/api/admin/users/${p.id}`} class="user-edit-grid">
+            <div class="field" style="margin-bottom:0">
+              <label>Correo</label>
+              <div class="static-value">{p.email}{isMe && <span class="tag" style="margin-left:6px">tú</span>}</div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for={`name-${p.id}`}>Nombre</label>
+              <input id={`name-${p.id}`} type="text" name="full_name" value={p.full_name ?? ''} />
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for={`role-${p.id}`}>Rol</label>
+              <select id={`role-${p.id}`} name="role" disabled={isMe}>
+                <option value="admin" selected={p.role === 'admin'}>admin</option>
+                <option value="super_admin" selected={p.role === 'super_admin'}>super_admin</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for={`pass-${p.id}`}>Nueva contraseña</label>
+              <input id={`pass-${p.id}`} type="password" name="password" minlength="8" placeholder="dejar vacío para no cambiar" />
+            </div>
+            <div style="align-self:end">
+              <button type="submit" class="btn secondary" style="width:100%">Guardar</button>
+            </div>
+          </form>
+          {!isMe && (
+            <form method="POST" action={`/api/admin/users/${p.id}/delete`} class="user-delete-form" onsubmit="return confirm('¿Eliminar este usuario? No podrá volver a entrar al panel.')">
+              <button type="submit" class="btn danger">Eliminar</button>
+            </form>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</AdminLayout>

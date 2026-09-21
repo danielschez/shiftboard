@@ -1,0 +1,45 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+
+const { data: settings } = await Astro.locals.supabase
+  .from('app_settings')
+  .select('min_notice_days')
+  .single();
+
+const { data: eventTypes } = await Astro.locals.supabase
+  .from('event_types')
+  .select('label, requires_notice')
+  .order('label');
+---
+<AdminLayout title="Ajustes" active="ajustes">
+  <h1>Ajustes</h1>
+
+  {error && <div class="alert error">{decodeURIComponent(error)}</div>}
+  {ok && <div class="alert ok">Ajustes guardados.</div>}
+
+  <div class="card" style="max-width:420px">
+    <h2 style="margin-bottom:14px">Anticipación mínima para pedir permiso</h2>
+    <form method="POST" action="/api/admin/settings">
+      <div class="field">
+        <label for="min_notice_days">Días de anticipación</label>
+        <input
+          type="number"
+          id="min_notice_days"
+          name="min_notice_days"
+          min="0"
+          value={settings?.min_notice_days ?? 15}
+          required
+        />
+      </div>
+      <button type="submit" class="btn">Guardar</button>
+    </form>
+    <p style="color:var(--ink-muted);font-size:0.85rem;margin-top:14px">
+      Si un evento se registra con menos días de los indicados aquí, el sistema
+      exige una justificación en texto. Aplica a:
+      {(eventTypes ?? []).filter((t) => t.requires_notice).map((t) => t.label).join(', ')}.
+    </p>
+  </div>
+</AdminLayout>
