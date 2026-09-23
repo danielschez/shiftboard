@@ -287,7 +287,7 @@ input, select, textarea {
 }
 .calendar-grid .dow {
   font-size: 0.75rem;
-  color: var(--ink-muted);
+  color: var(--on-bg);
   text-align: center;
   padding-bottom: 4px;
   font-family: var(--font-mono);
