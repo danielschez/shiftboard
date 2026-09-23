@@ -1,11 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #f6f5f1;
+  --bg: #795c85;
   --surface: #ffffff;
-  --border: #e2ded4;
-  --ink: #211f1a;
-  --ink-muted: #6b6558;
+  --surface-tint: #f2ecf5;
+  --border: #e3d9ea;
+  --ink: #241a29;
+  --ink-muted: #7a6b82;
+  --on-bg: #faf6fb;
+  --on-bg-muted: #ddc9e6;
   --accent: #2b5d50;
   --accent-ink: #ffffff;
   --danger-bg: #fbe9e7;
@@ -41,6 +44,13 @@ h1, h2, h3 {
   max-width: 1080px;
   margin: 0 auto;
   padding: 32px 24px 64px;
+  color: var(--on-bg);
+}
+
+/* Todo lo que vive dentro de una superficie blanca vuelve a texto oscuro,
+   independientemente de que el fondo de la página ahora sea morado. */
+.card, .day-cell, .stat-card {
+  color: var(--ink);
 }
 
 .topbar {
@@ -55,14 +65,15 @@ h1, h2, h3 {
 .topbar .brand {
   font-size: 1.15rem;
   font-weight: 700;
+  color: var(--on-bg);
 }
 .topbar nav a {
   margin-left: 18px;
   text-decoration: none;
-  color: var(--ink-muted);
+  color: var(--on-bg-muted);
   font-size: 0.92rem;
 }
-.topbar nav a:hover { color: var(--ink); }
+.topbar nav a:hover { color: var(--on-bg); }
 
 .admin-header {
   position: sticky;
@@ -113,7 +124,7 @@ h1, h2, h3 {
   border: 1px solid var(--border);
   color: var(--ink-muted);
 }
-.role-badge.super { color: var(--accent); border-color: var(--accent); background: #eaf2ef; }
+.role-badge.super { color: var(--accent); border-color: var(--accent); background: var(--surface-tint); }
 
 .admin-nav {
   display: flex;
@@ -132,8 +143,8 @@ h1, h2, h3 {
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
-.admin-nav a:hover { color: var(--ink); background: var(--bg); }
-.admin-nav a.active { color: var(--ink); background: var(--bg); }
+.admin-nav a:hover { color: var(--ink); background: var(--surface-tint); }
+.admin-nav a.active { color: var(--ink); background: var(--surface-tint); }
 
 .admin-header-actions {
   display: flex;
@@ -258,7 +269,8 @@ input, select, textarea {
   font-family: var(--font-mono);
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface-tint);
+  color: var(--ink);
   border: 1px solid var(--border);
 }
 .dot {
@@ -290,12 +302,20 @@ input, select, textarea {
   font-size: 0.8rem;
 }
 .day-cell.outside { opacity: 0.35; }
+.day-cell.today {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.day-cell .date-badge { display: block; }
 .day-cell .num {
   font-family: var(--font-mono);
   color: var(--ink-muted);
   font-size: 0.75rem;
 }
+.day-cell.today .num { color: var(--accent); font-weight: 600; }
+.day-cell .dow-label { display: none; }
 .day-cell .events { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
+.day-cell .no-events { display: none; }
 .event-chip {
   border-radius: 5px;
   padding: 2px 5px;
@@ -311,11 +331,16 @@ input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 .month-nav .month-label {
   font-family: var(--font-mono);
   font-size: 1rem;
+  order: -1;
+  flex: 1 0 100%;
+  text-align: center;
 }
 
 .legend {
@@ -323,6 +348,7 @@ input, select, textarea {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 20px;
+
 }
 
 /* --- Usuarios --- */
@@ -398,7 +424,7 @@ input, select, textarea {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--surface-tint);
   border-left: 3px solid var(--border);
   font-size: 0.92rem;
 }
@@ -412,3 +438,58 @@ input, select, textarea {
   margin: 32px 0 12px;
 }
 .section-title h2 { margin: 0; }
+
+/* --- Calendario público: responsive (agenda en móvil) --- */
+@media (max-width: 640px) {
+  .shell { padding: 20px 14px 48px; }
+
+  .month-nav .month-label { font-size: 1.05rem; margin-bottom: 4px; }
+
+  .calendar-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .calendar-grid .dow { display: none; }
+
+  .day-cell {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: auto;
+    padding: 10px 12px;
+  }
+  .day-cell.outside { display: none; }
+
+  .day-cell .date-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    min-width: 42px;
+    padding: 6px 0;
+    border-radius: 8px;
+    background: var(--surface-tint);
+  }
+  .day-cell .date-badge .num { font-size: 1rem; }
+  .day-cell .dow-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--ink-muted);
+    text-transform: lowercase;
+  }
+
+  .day-cell .events {
+    margin-top: 2px;
+    flex: 1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .day-cell .no-events { display: inline; color: var(--ink-muted); font-size: 0.78rem; }
+  .event-chip { white-space: normal; font-size: 0.74rem; }
+
+  .legend { justify-content: center; }
+}

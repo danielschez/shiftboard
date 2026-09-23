@@ -5,8 +5,8 @@ const error = Astro.url.searchParams.get('error');
 ---
 <Layout title="Ingresar · Admin">
   <div class="shell" style="max-width:400px;padding-top:80px">
-    <h1 style="text-align:center">Administrador</h1>
-    <p style="color:var(--ink-muted);margin-top:-8px; text-align:center">Calendario de Monitor :)</p>
+    <h1>Panel admin</h1>
+    <p style="color:var(--on-bg-muted);margin-top:-8px">Calendario de colaboradores</p>
 
     {error && <div class="alert error">{error}</div>}
 
@@ -21,5 +21,11 @@ const error = Astro.url.searchParams.get('error');
       </div>
       <button type="submit" class="btn" style="width:100%;justify-content:center">Entrar</button>
     </form>
+
+    <p style="color:var(--on-bg-muted);font-size:0.85rem;margin-top:16px">
+      Los usuarios se crean y administran desde <strong>Usuarios</strong> dentro
+      del panel (solo super_admin). Si aún no tienes ninguno, créalo desde
+      Supabase (Authentication → Users → Add user).
+    </p>
   </div>
 </Layout>
