@@ -2,8 +2,18 @@
 import AdminLayout from '../../layouts/AdminLayout.astro';
 
 const isSuperAdmin = Astro.locals.role === 'super_admin';
+
+const { data: myProfile } = await Astro.locals.supabase
+  .from('profiles')
+  .select('full_name')
+  .eq('id', Astro.locals.user?.id)
+  .single();
+
 const myName =
-  (Astro.locals.user?.user_metadata?.full_name as string | undefined) ?? Astro.locals.user?.email ?? '';
+  myProfile?.full_name?.trim() ||
+  (Astro.locals.user?.user_metadata?.full_name as string | undefined) ||
+  Astro.locals.user?.email?.split('@')[0] ||
+  '';
 
 const { count: totalColaboradores } = await Astro.locals.supabase
   .from('collaborators')
@@ -43,7 +53,7 @@ const quickLinks = [
 ].filter((l) => l.show);
 ---
 <AdminLayout title="Resumen" active="dashboard">
-  <h1>Hola, {myName.split('@')[0]}</h1>
+  <h1>Hola, {myName}</h1>
   <p style="color:var(--ink-muted);margin-top:-8px">Esto es lo que está pasando hoy.</p>
 
   <div class="stat-grid">
