@@ -26,6 +26,26 @@ insert into shifts (name, start_time, end_time) values
 on conflict do nothing;
 
 -- ---------------------------------------------------------
+-- Rotación de turnos
+--
+-- Estos 3 turnos rotan en bloque cada 4 semanas, sincronizados
+-- para todos: 7am-4pm -> 11pm-7am -> 3pm-11:30pm -> (vuelve a 7am-4pm).
+-- El turno 9am-7pm queda fuera de la rotación (fijo).
+-- ---------------------------------------------------------
+alter table shifts add column if not exists rotates boolean not null default false;
+alter table shifts add column if not exists next_shift_id uuid references shifts(id);
+
+update shifts set rotates = true where name in ('7am - 4pm', '3pm - 11:30pm', '11pm - 7am');
+update shifts set rotates = false, next_shift_id = null where name = '9am - 7pm';
+
+update shifts set next_shift_id = (select id from shifts where name = '11pm - 7am')
+  where name = '7am - 4pm';
+update shifts set next_shift_id = (select id from shifts where name = '3pm - 11:30pm')
+  where name = '11pm - 7am';
+update shifts set next_shift_id = (select id from shifts where name = '7am - 4pm')
+  where name = '3pm - 11:30pm';
+
+-- ---------------------------------------------------------
 -- Colaboradores
 -- ---------------------------------------------------------
 create table if not exists collaborators (
@@ -118,7 +138,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------
--- Ajustes generales (días de anticipación mínimos)
+-- Ajustes generales (días de anticipación, rotación de turnos)
 -- ---------------------------------------------------------
 create table if not exists app_settings (
   id int primary key default 1,
@@ -128,6 +148,12 @@ create table if not exists app_settings (
 
 insert into app_settings (id, min_notice_days) values (1, 15)
 on conflict (id) do nothing;
+
+-- rotation_anchor_date: cualquier fecha dentro del periodo de 4 semanas
+-- "actual" en el que collaborators.shift_id ya es correcto tal cual está
+-- guardado. A partir de esa fecha se proyecta hacia adelante y atrás.
+alter table app_settings add column if not exists rotation_anchor_date date not null default current_date;
+alter table app_settings add column if not exists rotation_period_days int not null default 28;
 
 -- ---------------------------------------------------------
 -- Eventos
@@ -157,12 +183,59 @@ create index if not exists idx_events_collaborator on events(collaborator_id);
 create index if not exists idx_events_created_at on events(created_at);
 
 -- ---------------------------------------------------------
+-- ---------------------------------------------------------
+-- Turno efectivo en una fecha dada (proyecta la rotación)
+--
+-- collaborators.shift_id representa el turno del colaborador durante
+-- el periodo de 4 semanas que contiene a app_settings.rotation_anchor_date.
+-- Para cualquier otra fecha, se avanza/retrocede por la cadena
+-- shifts.next_shift_id tantos periodos de 4 semanas como corresponda.
+-- Los turnos con rotates = false (ej. 9am-7pm) nunca cambian.
+-- ---------------------------------------------------------
+create or replace function effective_shift_for_date(p_collaborator_id uuid, p_date date)
+returns uuid
+language plpgsql
+stable
+as $$
+declare
+  v_shift shifts%rowtype;
+  v_anchor date;
+  v_period int;
+  v_weeks bigint;
+  v_steps int;
+  i int;
+begin
+  select s.* into v_shift
+    from collaborators c join shifts s on s.id = c.shift_id
+    where c.id = p_collaborator_id;
+
+  if not found or v_shift.rotates is not true then
+    return v_shift.id;
+  end if;
+
+  select rotation_anchor_date, rotation_period_days into v_anchor, v_period
+    from app_settings where id = 1;
+
+  v_weeks := floor((p_date - v_anchor)::numeric / v_period);
+  -- ciclo de 3 turnos; normaliza a 0/1/2 incluso para fechas pasadas (negativas)
+  v_steps := ((v_weeks % 3) + 3) % 3;
+
+  for i in 1..v_steps loop
+    select * into v_shift from shifts where id = v_shift.next_shift_id;
+  end loop;
+
+  return v_shift.id;
+end;
+$$;
+
+-- ---------------------------------------------------------
 -- Regla 1: cobertura de turno
 --
 -- Aplica a todos los tipos de evento con blocks_coverage = true
--- (todos menos paternidad). Un colaborador puede pedir el permiso
--- siempre y cuando, después de aprobarlo, siga quedando AL MENOS 1
--- colaborador activo de su mismo turno cubriendo esas fechas.
+-- (todos menos paternidad). Usa el turno EFECTIVO en la fecha del
+-- evento (no el turno actual del colaborador), para que una solicitud
+-- a futuro se valide contra el turno que va a tener ese día, después
+-- de que rote.
 -- ---------------------------------------------------------
 create or replace function check_shift_coverage()
 returns trigger as $$
@@ -181,17 +254,19 @@ begin
     return new;
   end if;
 
-  select shift_id into v_shift_id from collaborators where id = new.collaborator_id;
+  v_shift_id := effective_shift_for_date(new.collaborator_id, new.start_date);
 
   select count(*) into v_activos_en_turno
-    from collaborators
-    where shift_id = v_shift_id and active = true;
+    from collaborators c
+    where c.active = true
+      and effective_shift_for_date(c.id, new.start_date) = v_shift_id;
 
   select count(distinct e.collaborator_id) into v_fuera_en_turno
     from events e
     join collaborators c on c.id = e.collaborator_id
     join event_types et on et.id = e.event_type_id
-    where c.shift_id = v_shift_id
+    where c.active = true
+      and effective_shift_for_date(c.id, new.start_date) = v_shift_id
       and et.blocks_coverage = true
       and e.status = 'aprobado'
       and e.id <> coalesce(new.id, '00000000-0000-0000-0000-000000000000'::uuid)
@@ -384,3 +459,17 @@ create policy "super_admin read all profiles" on profiles for select using (is_s
 drop policy if exists "super_admin update profiles" on profiles;
 create policy "super_admin update profiles" on profiles for update
   using (is_super_admin()) with check (is_super_admin());
+
+-- ---------------------------------------------------------
+-- Vista de apoyo: turno efectivo HOY de cada colaborador,
+-- para mostrarlo en el admin sin tener que llamar la función
+-- una vez por fila desde el cliente.
+-- ---------------------------------------------------------
+create or replace view collaborator_effective_shift_today
+with (security_invoker = true) as
+select
+  c.id as collaborator_id,
+  effective_shift_for_date(c.id, current_date) as effective_shift_id
+from collaborators c;
+
+grant select on collaborator_effective_shift_today to anon, authenticated;

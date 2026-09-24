@@ -6,13 +6,22 @@ const ok = Astro.url.searchParams.get('ok');
 
 const { data: shifts } = await Astro.locals.supabase
   .from('shifts')
-  .select('id, name, start_time, end_time')
+  .select('id, name, start_time, end_time, rotates')
   .order('start_time');
 
 const { data: collaborators } = await Astro.locals.supabase
   .from('collaborators')
-  .select('id, full_name, active, shifts(name, start_time, end_time)')
+  .select('id, full_name, active, shift_id, shifts(name, start_time, end_time, rotates)')
   .order('full_name');
+
+const { data: effectiveToday } = await Astro.locals.supabase
+  .from('collaborator_effective_shift_today')
+  .select('collaborator_id, effective_shift_id');
+
+const shiftsById = new Map((shifts ?? []).map((s) => [s.id, s]));
+const effectiveByCollaborator = new Map(
+  (effectiveToday ?? []).map((e: any) => [e.collaborator_id, e.effective_shift_id])
+);
 ---
 <AdminLayout title="Colaboradores" active="colaboradores">
   <h1>Colaboradores</h1>
@@ -28,10 +37,10 @@ const { data: collaborators } = await Astro.locals.supabase
         <input type="text" id="full_name" name="full_name" required />
       </div>
       <div class="field">
-        <label for="shift_id">Turno</label>
+        <label for="shift_id">Turno base</label>
         <select id="shift_id" name="shift_id" required>
           {(shifts ?? []).map((s) => (
-            <option value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>
+            <option value={s.id}>{s.name} ({s.start_time}–{s.end_time}){s.rotates ? ' · rota cada 4 semanas' : ''}</option>
           ))}
         </select>
       </div>
@@ -40,30 +49,57 @@ const { data: collaborators } = await Astro.locals.supabase
   </div>
 
   <h2>Todos</h2>
-  <div class="card">
-    <table>
-      <thead>
-        <tr><th>Nombre</th><th>Turno</th><th>Estado</th><th></th></tr>
-      </thead>
-      <tbody>
-        {(collaborators ?? []).map((c: any) => (
-          <tr>
-            <td>{c.full_name}</td>
-            <td>{c.shifts?.name} ({c.shifts?.start_time}–{c.shifts?.end_time})</td>
-            <td>{c.active ? 'Activo' : 'Inactivo'}</td>
-            <td style="text-align:right">
-              <form method="POST" action={`/api/admin/collaborators/${c.id}/toggle`} style="display:inline">
-                <button type="submit" class="btn secondary" style="padding:5px 10px;font-size:0.82rem">
-                  {c.active ? 'Desactivar' : 'Activar'}
-                </button>
-              </form>
-              <form method="POST" action={`/api/admin/collaborators/${c.id}/delete`} style="display:inline">
-                <button type="submit" class="btn danger" style="padding:5px 10px;font-size:0.82rem">Eliminar</button>
-              </form>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+  <p style="color:var(--on-bg-muted);margin-top:-8px;font-size:0.85rem">
+    "Turno base" es el que tiene guardado; "turno hoy" es el que le toca en la
+    rotación actual — si no coinciden, es porque ya rotó desde que se dio de alta.
+  </p>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    {(collaborators ?? []).map((c: any) => {
+      const effectiveId = effectiveByCollaborator.get(c.id);
+      const effectiveShift = effectiveId ? shiftsById.get(effectiveId) : null;
+      const rotated = c.shifts?.rotates && effectiveId && effectiveId !== c.shift_id;
+      return (
+        <div class="card user-row">
+          <form method="POST" action={`/api/admin/collaborators/${c.id}/edit`} class="user-edit-grid">
+            <div class="field" style="margin-bottom:0">
+              <label for={`name-${c.id}`}>Nombre</label>
+              <input id={`name-${c.id}`} type="text" name="full_name" value={c.full_name} />
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for={`shift-${c.id}`}>Turno base</label>
+              <select id={`shift-${c.id}`} name="shift_id">
+                {(shifts ?? []).map((s) => (
+                  <option value={s.id} selected={s.id === c.shift_id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Turno hoy</label>
+              <div class="static-value">
+                {effectiveShift?.name ?? '—'}
+                {rotated && <span class="tag" style="margin-left:6px">rotó</span>}
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Estado</label>
+              <div class="static-value">{c.active ? 'Activo' : 'Inactivo'}</div>
+            </div>
+            <div style="align-self:end">
+              <button type="submit" class="btn secondary" style="width:100%">Guardar</button>
+            </div>
+          </form>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-left:12px">
+            <form method="POST" action={`/api/admin/collaborators/${c.id}/toggle`}>
+              <button type="submit" class="btn secondary" style="padding:5px 10px;font-size:0.82rem;width:100%">
+                {c.active ? 'Desactivar' : 'Activar'}
+              </button>
+            </form>
+            <form method="POST" action={`/api/admin/collaborators/${c.id}/delete`}>
+              <button type="submit" class="btn danger" style="padding:5px 10px;font-size:0.82rem;width:100%">Eliminar</button>
+            </form>
+          </div>
+        </div>
+      );
+    })}
   </div>
 </AdminLayout>

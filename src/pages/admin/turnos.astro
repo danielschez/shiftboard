@@ -6,11 +6,11 @@ const ok = Astro.url.searchParams.get('ok');
 
 const { data: shifts } = await Astro.locals.supabase
   .from('shifts')
-  .select('id, name, start_time, end_time')
+  .select('id, name, start_time, end_time, rotates, next_shift_id')
   .order('start_time');
 
-// Cuenta colaboradores activos por turno, para que el admin vea de un
-// vistazo cuánta gente hay cubriendo cada horario.
+// Cuenta colaboradores activos por turno base, para que el admin vea de un
+// vistazo cuánta gente hay asignada a cada horario.
 const { data: collaborators } = await Astro.locals.supabase
   .from('collaborators')
   .select('shift_id, active');
@@ -18,6 +18,24 @@ const { data: collaborators } = await Astro.locals.supabase
 function activeCount(shiftId: string) {
   return (collaborators ?? []).filter((c) => c.shift_id === shiftId && c.active).length;
 }
+
+const shiftsById = new Map((shifts ?? []).map((s) => [s.id, s]));
+const rotatingChain = (shifts ?? []).filter((s) => s.rotates);
+// arma la cadena en orden empezando por cualquiera de los que rotan
+const cycle: any[] = [];
+if (rotatingChain.length > 0) {
+  let current = rotatingChain[0];
+  for (let i = 0; i < rotatingChain.length; i++) {
+    cycle.push(current);
+    current = shiftsById.get(current.next_shift_id);
+    if (!current) break;
+  }
+}
+
+const { data: settings } = await Astro.locals.supabase
+  .from('app_settings')
+  .select('rotation_anchor_date, rotation_period_days')
+  .single();
 ---
 <AdminLayout title="Turnos" active="turnos">
   <h1>Turnos</h1>
@@ -27,6 +45,27 @@ function activeCount(shiftId: string) {
 
   {error && <div class="alert error">{decodeURIComponent(error)}</div>}
   {ok && <div class="alert ok">Guardado correctamente.</div>}
+
+  {cycle.length > 0 && (
+    <div class="card" style="margin-bottom:24px">
+      <h2 style="margin-bottom:10px">Rotación cada {settings?.rotation_period_days ?? 28} días</h2>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-family:var(--font-mono);font-size:0.9rem">
+        {cycle.map((s, i) => (
+          <>
+            <span class="tag">{s.name}</span>
+            {i < cycle.length - 1 && <span style="color:var(--ink-muted)">&rarr;</span>}
+          </>
+        ))}
+        <span style="color:var(--ink-muted)">&rarr;</span>
+        <span class="tag">{cycle[0]?.name}</span>
+      </div>
+      <p style="color:var(--ink-muted);font-size:0.82rem;margin:10px 0 0">
+        Sincronizado para todos. Fecha de referencia: <strong>{settings?.rotation_anchor_date}</strong>
+        (así estaba asignado el "turno base" de cada quien). Se ajusta en
+        <a href="/admin/ajustes"> Ajustes</a>.
+      </p>
+    </div>
+  )}
 
   <div class="card" style="margin-bottom:24px">
     <h2 style="margin-bottom:14px">Agregar turno</h2>
@@ -43,6 +82,10 @@ function activeCount(shiftId: string) {
         <label for="end_time">Hora de fin</label>
         <input type="time" id="end_time" name="end_time" required />
       </div>
+      <p style="color:var(--ink-muted);font-size:0.82rem">
+        Los turnos nuevos se crean fijos (no rotan). Para meterlos a la
+        rotación, avísame y lo configuro en la base de datos.
+      </p>
       <button type="submit" class="btn">Agregar turno</button>
     </form>
   </div>
@@ -51,13 +94,14 @@ function activeCount(shiftId: string) {
   <div class="card">
     <table>
       <thead>
-        <tr><th>Nombre</th><th>Horario</th><th>Colaboradores activos</th><th></th></tr>
+        <tr><th>Nombre</th><th>Horario</th><th>Rotación</th><th>Colaboradores (turno base)</th><th></th></tr>
       </thead>
       <tbody>
         {(shifts ?? []).map((s) => (
           <tr>
             <td>{s.name}</td>
             <td>{s.start_time}–{s.end_time}</td>
+            <td>{s.rotates ? 'Rota cada 4 semanas' : 'Fijo'}</td>
             <td>{activeCount(s.id)}</td>
             <td style="text-align:right">
               <form method="POST" action={`/api/admin/shifts/${s.id}/delete`} style="display:inline">

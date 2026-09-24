@@ -14,6 +14,7 @@ const SUPER_ADMIN_PREFIXES = [
   '/api/admin/historial',
   '/api/admin/users',
   '/api/admin/settings',
+  '/api/admin/rotation',
 ];
 
 function isEventsDeleteRoute(path: string) {

@@ -6,7 +6,7 @@ const ok = Astro.url.searchParams.get('ok');
 
 const { data: settings } = await Astro.locals.supabase
   .from('app_settings')
-  .select('min_notice_days')
+  .select('min_notice_days, rotation_anchor_date, rotation_period_days')
   .single();
 
 const { data: eventTypes } = await Astro.locals.supabase
@@ -20,7 +20,7 @@ const { data: eventTypes } = await Astro.locals.supabase
   {error && <div class="alert error">{decodeURIComponent(error)}</div>}
   {ok && <div class="alert ok">Ajustes guardados.</div>}
 
-  <div class="card" style="max-width:420px">
+  <div class="card" style="max-width:420px;margin-bottom:24px">
     <h2 style="margin-bottom:14px">Anticipación mínima para pedir permiso</h2>
     <form method="POST" action="/api/admin/settings">
       <div class="field">
@@ -40,6 +40,41 @@ const { data: eventTypes } = await Astro.locals.supabase
       Si un evento se registra con menos días de los indicados aquí, el sistema
       exige una justificación en texto. Aplica a:
       {(eventTypes ?? []).filter((t) => t.requires_notice).map((t) => t.label).join(', ')}.
+    </p>
+  </div>
+
+  <div class="card" style="max-width:420px">
+    <h2 style="margin-bottom:14px">Rotación de turnos</h2>
+    <form method="POST" action="/api/admin/rotation">
+      <div class="field">
+        <label for="rotation_anchor_date">Fecha de referencia</label>
+        <input
+          type="date"
+          id="rotation_anchor_date"
+          name="rotation_anchor_date"
+          value={settings?.rotation_anchor_date}
+          required
+        />
+      </div>
+      <div class="field">
+        <label for="rotation_period_days">Días por periodo</label>
+        <input
+          type="number"
+          id="rotation_period_days"
+          name="rotation_period_days"
+          min="1"
+          value={settings?.rotation_period_days ?? 28}
+          required
+        />
+      </div>
+      <button type="submit" class="btn">Guardar</button>
+    </form>
+    <p style="color:var(--ink-muted);font-size:0.85rem;margin-top:14px">
+      La fecha de referencia debe caer dentro del periodo de 4 semanas en el
+      que el "turno base" de cada colaborador (en Colaboradores) ya es
+      correcto tal cual está guardado — a partir de ahí el sistema proyecta
+      la rotación hacia adelante y atrás automáticamente, sin que tengas que
+      volver a actualizar nada cada 4 semanas.
     </p>
   </div>
 </AdminLayout>
