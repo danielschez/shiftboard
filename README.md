@@ -119,6 +119,50 @@ en `event_types`) con menos días de los configurados, la base de datos
 rechaza el `insert` a menos que venga con `justification` (texto plano);
 el formulario de `/admin/eventos` ya incluye ese campo.
 
+## Rotación de turnos
+
+Tres turnos rotan en bloque cada 4 semanas, sincronizados para todos:
+**7am-4pm → 11pm-7am → 3pm-11:30pm → (vuelve a 7am-4pm)**. El turno 9am-7pm
+queda fijo, fuera de la rotación.
+
+- `collaborators.shift_id` representa el turno de esa persona durante el
+  periodo de 4 semanas que contiene a `app_settings.rotation_anchor_date`
+  (la "fecha de referencia", configurable en `/admin/ajustes`).
+- Para cualquier otra fecha — pasada o futura —, la función de Postgres
+  `effective_shift_for_date(colaborador, fecha)` proyecta el turno
+  correspondiente automáticamente. No hace falta actualizar nada cada 4
+  semanas.
+- **La regla de cobertura de turno usa el turno proyectado, no el actual.**
+  Si alguien en 7am-4pm hoy pide vacaciones para dentro de 2 meses, el
+  sistema valida la cobertura contra el turno que va a tener *ese día*
+  (según la rotación), no el de hoy.
+- `/admin/colaboradores` muestra el "turno base" (el guardado) junto al
+  "turno hoy" (el proyectado) para cada quien, con una etiqueta "rotó"
+  cuando ya cambiaron desde que se dio de alta.
+- `/admin/turnos` muestra el ciclo completo y la fecha de referencia actual.
+
+## Coberturas de backup y descanso compensatorio
+
+Algunos colaboradores de 9am-7pm se marcan como **backup** (checkbox en
+`/admin/colaboradores`). Cuando uno de ellos cubre otro turno:
+
+1. Lo registras en `/admin/coberturas`: quién cubre, qué turno, del día A al
+   día B.
+2. El sistema revisa automáticamente qué sábados/domingos cayeron dentro de
+   esas fechas y le genera al backup un **crédito de descanso compensatorio**
+   por cada uno — utilizable solo la semana siguiente a ese fin de semana
+   (lunes a domingo).
+3. Cuando des de alta el evento **"Descanso compensatorio"** para ese
+   colaborador en `/admin/eventos`, la base de datos exige que exista un
+   crédito sin usar cuya ventana cubra esa fecha exacta; si no lo hay, lo
+   rechaza con alerta (igual que las otras reglas). Si lo hay, lo consume.
+4. `/admin/coberturas` también muestra la lista de créditos generados y si
+   ya se usaron o siguen disponibles.
+
+Si borras una cobertura, sus créditos (usados o no) se borran con ella; si
+un crédito ya se había usado para un evento, ese evento queda huérfano de
+crédito pero no se borra solo — bórralo a mano si aplica.
+
 ## Cómo funciona la regla de "no dejar el turno sin cobertura"
 
 Vive en la base de datos (`supabase/schema.sql`, función `check_shift_coverage`),

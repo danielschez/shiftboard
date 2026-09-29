@@ -3,7 +3,7 @@ import Layout from './Layout.astro';
 
 interface Props {
   title: string;
-  active: 'dashboard' | 'colaboradores' | 'turnos' | 'eventos' | 'historial' | 'usuarios' | 'ajustes';
+  active: 'dashboard' | 'colaboradores' | 'turnos' | 'coberturas' | 'eventos' | 'historial' | 'usuarios' | 'ajustes';
 }
 const { title, active } = Astro.props;
 const role = Astro.locals.role;
@@ -14,6 +14,7 @@ const links = [
   { key: 'eventos', href: '/admin/eventos', label: 'Eventos', superAdminOnly: false },
   { key: 'colaboradores', href: '/admin/colaboradores', label: 'Colaboradores', superAdminOnly: true },
   { key: 'turnos', href: '/admin/turnos', label: 'Turnos', superAdminOnly: true },
+  { key: 'coberturas', href: '/admin/coberturas', label: 'Coberturas', superAdminOnly: true },
   { key: 'historial', href: '/admin/historial', label: 'Historial', superAdminOnly: true },
   { key: 'usuarios', href: '/admin/usuarios', label: 'Usuarios', superAdminOnly: true },
   { key: 'ajustes', href: '/admin/ajustes', label: 'Ajustes', superAdminOnly: true },

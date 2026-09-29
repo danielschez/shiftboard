@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import { toISODate } from '../../lib/calendar';
 
 const error = Astro.url.searchParams.get('error');
 const ok = Astro.url.searchParams.get('ok');
@@ -22,7 +23,7 @@ const { data: settings } = await Astro.locals.supabase
   .single();
 const minNoticeDays = settings?.min_notice_days ?? 15;
 
-const todayISO = new Date().toISOString().slice(0, 10);
+const todayISO = toISODate(new Date());
 const { data: upcoming } = await Astro.locals.supabase
   .from('events')
   .select('id, start_date, end_date, note, justification, created_by_name, collaborators(full_name), event_types(label, color)')
@@ -43,7 +44,11 @@ const { data: upcoming } = await Astro.locals.supabase
         <label for="event_type_id">Tipo de evento</label>
         <select id="event_type_id" name="event_type_id" required>
           {(eventTypes ?? []).map((t) => (
-            <option value={t.id}>{t.label}{t.code === 'festivo' ? ' (aplica a todos)' : ''}</option>
+            <option value={t.id}>
+              {t.label}
+              {t.code === 'festivo' ? ' (aplica a todos)' : ''}
+              {t.code === 'descanso_compensatorio' ? ' (requiere crédito disponible)' : ''}
+            </option>
           ))}
         </select>
       </div>

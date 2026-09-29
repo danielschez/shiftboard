@@ -11,7 +11,7 @@ const { data: shifts } = await Astro.locals.supabase
 
 const { data: collaborators } = await Astro.locals.supabase
   .from('collaborators')
-  .select('id, full_name, active, shift_id, shifts(name, start_time, end_time, rotates)')
+  .select('id, full_name, active, shift_id, is_backup, shifts(name, start_time, end_time, rotates)')
   .order('full_name');
 
 const { data: effectiveToday } = await Astro.locals.supabase
@@ -44,6 +44,10 @@ const effectiveByCollaborator = new Map(
           ))}
         </select>
       </div>
+      <div class="field" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="is_backup" name="is_backup" style="width:auto" />
+        <label for="is_backup" style="margin:0">Puede ser backup de otros turnos</label>
+      </div>
       <button type="submit" class="btn">Agregar colaborador</button>
     </form>
   </div>
@@ -60,7 +64,7 @@ const effectiveByCollaborator = new Map(
       const rotated = c.shifts?.rotates && effectiveId && effectiveId !== c.shift_id;
       return (
         <div class="card user-row">
-          <form method="POST" action={`/api/admin/collaborators/${c.id}/edit`} class="user-edit-grid">
+          <form method="POST" action={`/api/admin/collaborators/${c.id}/edit`} class="collab-edit-grid">
             <div class="field" style="margin-bottom:0">
               <label for={`name-${c.id}`}>Nombre</label>
               <input id={`name-${c.id}`} type="text" name="full_name" value={c.full_name} />
@@ -72,6 +76,10 @@ const effectiveByCollaborator = new Map(
                   <option value={s.id} selected={s.id === c.shift_id}>{s.name}</option>
                 ))}
               </select>
+            </div>
+            <div class="checkbox-field">
+              <input type="checkbox" id={`backup-${c.id}`} name="is_backup" checked={c.is_backup} />
+              <label for={`backup-${c.id}`} style="margin:0;font-size:0.78rem">Backup</label>
             </div>
             <div class="field" style="margin-bottom:0">
               <label>Turno hoy</label>

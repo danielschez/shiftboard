@@ -18,12 +18,24 @@ create table if not exists shifts (
   created_at timestamptz not null default now()
 );
 
+-- Sin esto, "on conflict do nothing" en el insert de abajo no detecta nada
+-- (el primary key es un uuid aleatorio que nunca choca) y cada vez que se
+-- vuelve a correr este archivo se duplican los turnos base.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'shifts_name_key'
+  ) then
+    alter table shifts add constraint shifts_name_key unique (name);
+  end if;
+end $$;
+
 insert into shifts (name, start_time, end_time) values
   ('7am - 4pm', '07:00', '16:00'),
   ('3pm - 11:30pm', '15:00', '23:30'),
   ('11pm - 7am', '23:00', '07:00'),
   ('9am - 7pm', '09:00', '19:00')
-on conflict do nothing;
+on conflict (name) do nothing;
 
 -- ---------------------------------------------------------
 -- Rotación de turnos
@@ -53,8 +65,11 @@ create table if not exists collaborators (
   full_name text not null,
   shift_id uuid not null references shifts(id) on delete restrict,
   active boolean not null default true,
+  is_backup boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table collaborators add column if not exists is_backup boolean not null default false;
 
 -- ---------------------------------------------------------
 -- Tipos de evento (catálogo con color, si bloquea cobertura
@@ -77,7 +92,8 @@ insert into event_types (code, label, color, blocks_coverage, requires_notice) v
   ('tramite',     'Día de trámite',          '#1565C0', true,  true),
   ('paternidad',  'Paternidad / Maternidad', '#6A1B9A', false, true),
   ('cumpleanios', 'Cumpleaños',              '#EF6C00', true,  false),
-  ('festivo',     'Día festivo',             '#C62828', true,  false)
+  ('festivo',     'Día festivo',             '#C62828', true,  false),
+  ('descanso_compensatorio', 'Descanso compensatorio', '#00897B', true, false)
 on conflict (code) do nothing;
 
 update event_types set requires_notice = true where code in ('vacaciones', 'tramite', 'paternidad');
@@ -461,6 +477,139 @@ create policy "super_admin update profiles" on profiles for update
   using (is_super_admin()) with check (is_super_admin());
 
 -- ---------------------------------------------------------
+-- ---------------------------------------------------------
+-- Coberturas de backup (9am-7pm cubriendo a otro turno)
+-- ---------------------------------------------------------
+create table if not exists shift_coverages (
+  id uuid primary key default gen_random_uuid(),
+  backup_collaborator_id uuid not null references collaborators(id) on delete cascade,
+  covered_shift_id uuid not null references shifts(id),
+  covered_collaborator_id uuid references collaborators(id) on delete set null,
+  start_date date not null,
+  end_date date not null,
+  note text,
+  created_by uuid references auth.users(id),
+  created_by_name text,
+  created_at timestamptz not null default now(),
+  constraint valid_range check (end_date >= start_date)
+);
+
+-- ---------------------------------------------------------
+-- Créditos de descanso compensatorio: uno por cada sábado/domingo
+-- que un backup cubrió, utilizable solo la semana siguiente a ese
+-- fin de semana (lunes a domingo).
+-- ---------------------------------------------------------
+create table if not exists comp_day_credits (
+  id uuid primary key default gen_random_uuid(),
+  collaborator_id uuid not null references collaborators(id) on delete cascade,
+  coverage_id uuid references shift_coverages(id) on delete cascade,
+  earned_date date not null,
+  usable_from date not null,
+  usable_until date not null,
+  used_event_id uuid references events(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_comp_day_credits_collaborator on comp_day_credits(collaborator_id);
+
+create or replace function generate_comp_day_credits()
+returns trigger as $$
+declare
+  d date;
+  v_dow int;
+  v_next_monday date;
+begin
+  d := new.start_date;
+  while d <= new.end_date loop
+    v_dow := extract(dow from d)::int; -- 0 = domingo, 6 = sábado
+    if v_dow in (0, 6) then
+      v_next_monday := case v_dow when 6 then d + 2 else d + 1 end;
+      insert into comp_day_credits (collaborator_id, coverage_id, earned_date, usable_from, usable_until)
+      values (new.backup_collaborator_id, new.id, d, v_next_monday, v_next_monday + 6);
+    end if;
+    d := d + 1;
+  end loop;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_generate_comp_day_credits on shift_coverages;
+create trigger trg_generate_comp_day_credits
+  after insert on shift_coverages
+  for each row execute function generate_comp_day_credits();
+
+-- ---------------------------------------------------------
+-- Regla 3: consumir un crédito de descanso compensatorio
+--
+-- Al dar de alta un evento "descanso_compensatorio", exige que exista
+-- un crédito sin usar para ESE colaborador cuya ventana (usable_from/
+-- usable_until) cubra cada día del evento, y lo marca como usado.
+-- ---------------------------------------------------------
+create or replace function check_comp_day_credit()
+returns trigger as $$
+declare
+  v_code text;
+  v_day date;
+  v_credit_id uuid;
+begin
+  select code into v_code from event_types where id = new.event_type_id;
+  if v_code is distinct from 'descanso_compensatorio' then
+    return new;
+  end if;
+
+  if new.collaborator_id is null then
+    raise exception 'El descanso compensatorio necesita un colaborador'
+      using errcode = 'P0003';
+  end if;
+
+  v_day := new.start_date;
+  while v_day <= new.end_date loop
+    select id into v_credit_id
+      from comp_day_credits
+      where collaborator_id = new.collaborator_id
+        and used_event_id is null
+        and usable_from <= v_day
+        and usable_until >= v_day
+      order by usable_until asc
+      limit 1;
+
+    if v_credit_id is null then
+      raise exception 'No tiene un día de descanso compensatorio disponible para % (¿cubrió algún fin de semana la semana pasada?)', v_day
+        using errcode = 'P0003';
+    end if;
+
+    update comp_day_credits set used_event_id = new.id where id = v_credit_id;
+    v_day := v_day + 1;
+  end loop;
+
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_check_comp_day_credit on events;
+create trigger trg_check_comp_day_credit
+  before insert on events
+  for each row execute function check_comp_day_credit();
+
+alter table shift_coverages enable row level security;
+alter table comp_day_credits enable row level security;
+
+drop policy if exists "authenticated read coverages" on shift_coverages;
+create policy "authenticated read coverages" on shift_coverages for select
+  using (auth.role() = 'authenticated');
+
+drop policy if exists "super_admin write coverages" on shift_coverages;
+create policy "super_admin write coverages" on shift_coverages for all
+  using (is_super_admin()) with check (is_super_admin());
+
+drop policy if exists "authenticated read comp credits" on comp_day_credits;
+create policy "authenticated read comp credits" on comp_day_credits for select
+  using (auth.role() = 'authenticated');
+
+drop policy if exists "super_admin write comp credits" on comp_day_credits;
+create policy "super_admin write comp credits" on comp_day_credits for all
+  using (is_super_admin()) with check (is_super_admin());
+
 -- Vista de apoyo: turno efectivo HOY de cada colaborador,
 -- para mostrarlo en el admin sin tener que llamar la función
 -- una vez por fila desde el cliente.

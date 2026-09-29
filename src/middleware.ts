@@ -6,11 +6,13 @@ import { createSupabaseServerClient } from './lib/supabase';
 const SUPER_ADMIN_PREFIXES = [
   '/admin/colaboradores',
   '/admin/turnos',
+  '/admin/coberturas',
   '/admin/historial',
   '/admin/usuarios',
   '/admin/ajustes',
   '/api/admin/collaborators',
   '/api/admin/shifts',
+  '/api/admin/coverages',
   '/api/admin/historial',
   '/api/admin/users',
   '/api/admin/settings',

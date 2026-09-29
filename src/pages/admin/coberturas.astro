@@ -1,0 +1,147 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+
+const { data: backups } = await Astro.locals.supabase
+  .from('collaborators')
+  .select('id, full_name, shifts(name)')
+  .eq('active', true)
+  .eq('is_backup', true)
+  .order('full_name');
+
+const { data: allCollaborators } = await Astro.locals.supabase
+  .from('collaborators')
+  .select('id, full_name, shifts(name)')
+  .eq('active', true)
+  .order('full_name');
+
+const { data: shifts } = await Astro.locals.supabase
+  .from('shifts')
+  .select('id, name')
+  .eq('rotates', true)
+  .order('start_time');
+
+const { data: coverages } = await Astro.locals.supabase
+  .from('shift_coverages')
+  .select('id, start_date, end_date, note, backup:backup_collaborator_id(full_name), covered_shift:covered_shift_id(name), covered:covered_collaborator_id(full_name)')
+  .order('start_date', { ascending: false })
+  .limit(30);
+
+const { data: credits } = await Astro.locals.supabase
+  .from('comp_day_credits')
+  .select('id, earned_date, usable_from, usable_until, used_event_id, collaborators(full_name)')
+  .order('usable_until', { ascending: false })
+  .limit(50);
+---
+<AdminLayout title="Coberturas" active="coberturas">
+  <h1>Coberturas de backup</h1>
+  <p style="color:var(--on-bg-muted);margin-top:-8px">
+    Cuando alguien de 9am-7pm cubre otro turno, aquí se registra y el sistema
+    calcula solos los descansos compensatorios que gana.
+  </p>
+
+  {error && <div class="alert error">{decodeURIComponent(error)}</div>}
+  {ok && <div class="alert ok">Guardado correctamente.</div>}
+
+  {(backups ?? []).length === 0 && (
+    <div class="alert error">
+      No hay ningún colaborador marcado como "backup". Ve a
+      <a href="/admin/colaboradores"> Colaboradores</a> y márcalo ahí primero.
+    </div>
+  )}
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="margin-bottom:14px">Registrar cobertura</h2>
+    <form method="POST" action="/api/admin/coverages">
+      <div class="field">
+        <label for="backup_collaborator_id">Backup (de 9am-7pm)</label>
+        <select id="backup_collaborator_id" name="backup_collaborator_id" required>
+          {(backups ?? []).map((b: any) => (
+            <option value={b.id}>{b.full_name} ({b.shifts?.name})</option>
+          ))}
+        </select>
+      </div>
+      <div class="field">
+        <label for="covered_shift_id">Turno que va a cubrir</label>
+        <select id="covered_shift_id" name="covered_shift_id" required>
+          {(shifts ?? []).map((s) => (
+            <option value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+      <div class="field">
+        <label for="covered_collaborator_id">A quién cubre (opcional, solo referencia)</label>
+        <select id="covered_collaborator_id" name="covered_collaborator_id">
+          <option value="">— No especificar —</option>
+          {(allCollaborators ?? []).map((c: any) => (
+            <option value={c.id}>{c.full_name} ({c.shifts?.name})</option>
+          ))}
+        </select>
+      </div>
+      <div class="field">
+        <label for="start_date">Desde</label>
+        <input type="date" id="start_date" name="start_date" required />
+      </div>
+      <div class="field">
+        <label for="end_date">Hasta</label>
+        <input type="date" id="end_date" name="end_date" required />
+      </div>
+      <div class="field">
+        <label for="note">Nota (opcional)</label>
+        <input type="text" id="note" name="note" />
+      </div>
+      <button type="submit" class="btn">Registrar cobertura</button>
+    </form>
+  </div>
+
+  <h2>Últimas coberturas</h2>
+  <div class="card" style="margin-bottom:24px">
+    <table>
+      <thead>
+        <tr><th>Backup</th><th>Cubrió</th><th>A quién</th><th>Fechas</th><th></th></tr>
+      </thead>
+      <tbody>
+        {(coverages ?? []).length === 0 && <tr><td colspan="5" style="color:var(--ink-muted)">Sin coberturas registradas.</td></tr>}
+        {(coverages ?? []).map((cv: any) => (
+          <tr>
+            <td>{cv.backup?.full_name}</td>
+            <td>{cv.covered_shift?.name}</td>
+            <td>{cv.covered?.full_name ?? '—'}</td>
+            <td>{cv.start_date} → {cv.end_date}</td>
+            <td style="text-align:right">
+              <form method="POST" action={`/api/admin/coverages/${cv.id}/delete`} style="display:inline">
+                <button type="submit" class="btn danger" style="padding:5px 10px;font-size:0.82rem">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Créditos de descanso compensatorio</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Colaborador</th><th>Fin de semana cubierto</th><th>Usable</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        {(credits ?? []).length === 0 && <tr><td colspan="4" style="color:var(--ink-muted)">Sin créditos generados todavía.</td></tr>}
+        {(credits ?? []).map((cr: any) => (
+          <tr>
+            <td>{cr.collaborators?.full_name}</td>
+            <td>{cr.earned_date}</td>
+            <td>{cr.usable_from} → {cr.usable_until}</td>
+            <td>
+              {cr.used_event_id
+                ? <span class="tag"><span class="dot" style="background:#7a6b82"></span>usado</span>
+                : <span class="tag"><span class="dot" style="background:#00897B"></span>disponible</span>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

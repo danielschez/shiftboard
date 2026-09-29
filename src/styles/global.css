@@ -371,6 +371,21 @@ input, select, textarea {
 }
 .user-delete-form { margin-left: 12px; }
 
+.collab-edit-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1.1fr 0.7fr 1fr 0.9fr auto;
+  gap: 12px;
+  flex: 1;
+  align-items: end;
+}
+.collab-edit-grid .checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 9px;
+}
+.collab-edit-grid .checkbox-field input { width: auto; }
+
 /* --- Dashboard --- */
 .stat-grid {
   display: grid;
