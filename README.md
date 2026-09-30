@@ -163,6 +163,19 @@ Si borras una cobertura, sus créditos (usados o no) se borran con ella; si
 un crédito ya se había usado para un evento, ese evento queda huérfano de
 crédito pero no se borra solo — bórralo a mano si aplica.
 
+**Los créditos ya no tienen ventana de fecha.** Cualquier crédito sin usar
+de un colaborador sirve para cualquier día (entre semana o fin de semana),
+sin importar cuándo se ganó — se consume 1 crédito por cada día del evento,
+empezando por el más antiguo. Las columnas `usable_from`/`usable_until` se
+siguen calculando y mostrando en `/admin/coberturas` como referencia (la
+semana "sugerida"), pero ya no bloquean nada.
+
+**El calendario público muestra las coberturas de forma visual.** Mientras
+un backup esté cubriendo otro turno (según lo registrado en
+`/admin/coberturas`), esos días aparecen con un chip punteado
+"Backup · Nombre" en `/` — es solo informativo, no crea ni requiere ningún
+registro en `events`.
+
 ## Cómo funciona la regla de "no dejar el turno sin cobertura"
 
 Vive en la base de datos (`supabase/schema.sql`, función `check_shift_coverage`),

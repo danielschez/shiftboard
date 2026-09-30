@@ -562,19 +562,20 @@ begin
       using errcode = 'P0003';
   end if;
 
+  -- Cualquier crédito sin usar de ese colaborador sirve para cualquier día
+  -- (ya no importa la ventana de "la semana siguiente"); se consume 1
+  -- crédito por cada día del evento, empezando por el más antiguo.
   v_day := new.start_date;
   while v_day <= new.end_date loop
     select id into v_credit_id
       from comp_day_credits
       where collaborator_id = new.collaborator_id
         and used_event_id is null
-        and usable_from <= v_day
-        and usable_until >= v_day
-      order by usable_until asc
+      order by earned_date asc
       limit 1;
 
     if v_credit_id is null then
-      raise exception 'No tiene un día de descanso compensatorio disponible para % (¿cubrió algún fin de semana la semana pasada?)', v_day
+      raise exception 'No tiene créditos de descanso compensatorio disponibles'
         using errcode = 'P0003';
     end if;
 

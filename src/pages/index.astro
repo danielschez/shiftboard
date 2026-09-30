@@ -21,17 +21,29 @@ const { data: events } = await Astro.locals.supabase
   .gte('end_date', rangeStart)
   .eq('status', 'aprobado');
 
+// Coberturas de backup: solo visuales, no son eventos registrados.
+const { data: coverages } = await Astro.locals.supabase
+  .from('shift_coverages')
+  .select('start_date, end_date, backup:backup_collaborator_id(full_name), covered_shift:covered_shift_id(name)')
+  .lte('start_date', rangeEnd)
+  .gte('end_date', rangeStart);
+
 function eventsForDay(iso: string) {
   return (events ?? []).filter((e: any) => iso >= e.start_date && iso <= e.end_date);
 }
 
+function coveragesForDay(iso: string) {
+  return (coverages ?? []).filter((cv: any) => iso >= cv.start_date && iso <= cv.end_date);
+}
+
 const prev = addMonths(year, month, -1);
 const next = addMonths(year, month, 1);
+const todayISO = toISODate(today);
 ---
-<Layout title="Calendario Monitor">
+<Layout title="Calendario de colaboradores">
   <div class="shell">
     <div class="topbar">
-      <span class="brand">Monitor :)</span>
+      <span class="brand">Calendario de colaboradores</span>
       <nav>
         <a href="/admin">Panel admin</a>
       </nav>
@@ -45,14 +57,21 @@ const next = addMonths(year, month, 1);
 
     <div class="calendar-grid">
       {dayOfWeekLabels.map((d) => <div class="dow">{d}</div>)}
-      {grid.map((date) => {
+      {grid.map((date, i) => {
         const iso = toISODate(date);
         const isOutside = date.getMonth() + 1 !== month;
+        const isToday = iso === todayISO;
         const dayEvents = eventsForDay(iso);
+        const dayCoverages = coveragesForDay(iso);
+        const dow = dayOfWeekLabels[i % 7];
         return (
-          <div class={`day-cell ${isOutside ? 'outside' : ''}`}>
-            <div class="num">{date.getDate()}</div>
+          <div class={`day-cell ${isOutside ? 'outside' : ''} ${isToday ? 'today' : ''}`}>
+            <div class="date-badge">
+              <span class="num">{date.getDate()}</span>
+              <span class="dow-label">{dow}</span>
+            </div>
             <div class="events">
+              {dayEvents.length === 0 && dayCoverages.length === 0 && <span class="no-events">Sin eventos</span>}
               {dayEvents.slice(0, 4).map((e: any) => (
                 <div
                   class="event-chip"
@@ -63,6 +82,14 @@ const next = addMonths(year, month, 1);
                 </div>
               ))}
               {dayEvents.length > 4 && <div class="event-chip" style="background:#8a8577">+{dayEvents.length - 4} más</div>}
+              {dayCoverages.map((cv: any) => (
+                <div
+                  class="event-chip backup-chip"
+                  title={`Backup: ${cv.backup?.full_name} cubre ${cv.covered_shift?.name}`}
+                >
+                  Backup · {cv.backup?.full_name}
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -73,6 +100,7 @@ const next = addMonths(year, month, 1);
       {(eventTypes ?? []).map((t) => (
         <span class="tag"><span class="dot" style={`background:${t.color}`}></span>{t.label}</span>
       ))}
+      <span class="tag"><span class="dot backup-dot"></span>Backup cubriendo (no es un evento registrado)</span>
     </div>
   </div>
 </Layout>

@@ -326,6 +326,16 @@ input, select, textarea {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.event-chip.backup-chip {
+  background: transparent;
+  border: 1.5px dashed #00897B;
+  color: #00897B;
+  font-weight: 600;
+}
+.dot.backup-dot {
+  background: transparent;
+  border: 1.5px dashed #00897B;
+}
 
 .month-nav {
   display: flex;

@@ -125,7 +125,7 @@ const { data: credits } = await Astro.locals.supabase
   <div class="card">
     <table>
       <thead>
-        <tr><th>Colaborador</th><th>Fin de semana cubierto</th><th>Usable</th><th>Estado</th></tr>
+        <tr><th>Colaborador</th><th>Fin de semana cubierto</th><th>Sugerido para (referencia)</th><th>Estado</th></tr>
       </thead>
       <tbody>
         {(credits ?? []).length === 0 && <tr><td colspan="4" style="color:var(--ink-muted)">Sin créditos generados todavía.</td></tr>}
