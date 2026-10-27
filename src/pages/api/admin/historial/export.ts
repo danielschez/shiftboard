@@ -1,10 +1,15 @@
 import type { APIRoute } from 'astro';
 import * as XLSX from 'xlsx';
 
+const seguro = (v: unknown): string => {
+  const s = String(v ?? '');
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+};
+
 export const GET: APIRoute = async ({ url, locals }) => {
   const today = new Date();
-  const year = Number(url.searchParams.get('y')) || today.getFullYear();
-  const month = Number(url.searchParams.get('m')) || today.getMonth() + 1;
+  const year = Math.min(2100, Math.max(2000, Math.trunc(Number(url.searchParams.get('y'))) || today.getFullYear()));
+  const month = Math.min(12, Math.max(1, Math.trunc(Number(url.searchParams.get('m'))) || today.getMonth() + 1));
 
   const rangeStart = `${year}-${String(month).padStart(2, '0')}-01`;
   const lastDay = new Date(year, month, 0).getDate();
@@ -18,18 +23,19 @@ export const GET: APIRoute = async ({ url, locals }) => {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return new Response(`No se pudo generar el archivo: ${error.message}`, { status: 500 });
+    console.error('export historial:', error.message);
+    return new Response('No se pudo generar el archivo.', { status: 500 });
   }
 
   const sheetData = (rows ?? []).map((e: any) => ({
-    Colaborador: e.collaborators?.full_name ?? 'General',
+    Colaborador: seguro(e.collaborators?.full_name ?? 'General'),
     'Tipo de evento': e.event_types?.label ?? '',
     'Fecha inicio': e.start_date,
     'Fecha fin': e.end_date,
-    Justificación: e.justification ?? '',
-    Nota: e.note ?? '',
-    'Dado de alta por': e.created_by_name ?? '',
-    'Fecha y hora de alta': new Date(e.created_at).toLocaleString('es-MX'),
+    Justificación: seguro(e.justification),
+    Nota: seguro(e.note),
+    'Dado de alta por': seguro(e.created_by_name),
+    'Fecha y hora de alta':    new Date(e.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(sheetData);
