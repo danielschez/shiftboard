@@ -1,0 +1,26 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+// El middleware ya redirige a /admin/login si no hay sesión
+// (la sesión temporal se crea en /api/auth/callback con el enlace del correo).
+const error = Astro.url.searchParams.get('error');
+---
+<Layout title="Nueva contraseña · Admin">
+  <div class="shell" style="max-width:400px;padding-top:80px">
+    <h1>Nueva contraseña</h1>
+
+    {error && <div class="alert error">{error}</div>}
+
+    <form method="POST" action="/api/auth/update-password" class="card" style="margin-top:20px">
+      <div class="field">
+        <label for="password">Nueva contraseña</label>
+        <input type="password" id="password" name="password" required minlength="8" autofocus />
+      </div>
+      <div class="field">
+        <label for="confirm">Confirmar contraseña</label>
+        <input type="password" id="confirm" name="confirm" required minlength="8" />
+      </div>
+      <button type="submit" class="btn" style="width:100%;justify-content:center">Guardar contraseña</button>
+    </form>
+  </div>
+</Layout>

@@ -208,3 +208,24 @@ src/
 supabase/
   schema.sql      tablas, seeds, función de cobertura, RLS
 ```
+
+## 4. Recuperar contraseña ("Olvidé mi contraseña")
+
+Flujo: `/admin/login` → `/admin/olvide-contrasena` → correo de Supabase →
+`/api/auth/callback` → `/admin/nueva-contrasena`.
+
+El correo lo envía **Supabase Auth**; la app no necesita ninguna librería de correo.
+Configura en el dashboard de Supabase:
+
+1. **Authentication → URL Configuration**
+   - *Site URL*: tu dominio de producción (ej. `https://tu-app.vercel.app`).
+   - *Redirect URLs*: agrega `https://tu-app.vercel.app/api/auth/callback`
+     y `http://localhost:4321/api/auth/callback`.
+2. **Project Settings → Authentication → SMTP Settings** → activa *Custom SMTP*
+   (Resend, Brevo, SendGrid, Gmail con contraseña de aplicación, etc.).
+   El SMTP integrado de Supabase solo envía ~2 correos/hora y únicamente a
+   miembros del equipo del proyecto, por lo que no sirve en producción.
+3. **Authentication → Rate Limits**: ajusta "emails per hour" si usas SMTP propio.
+4. (Opcional) **Authentication → Email Templates → Reset Password**: para que el
+   enlace funcione desde otro navegador/dispositivo, usa
+   `{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type=recovery`.
