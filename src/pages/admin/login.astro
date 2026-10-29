@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 
 const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
 ---
 <Layout title="Ingresar · Admin">
   <div class="shell" style="max-width:400px;padding-top:80px">
@@ -9,6 +10,7 @@ const error = Astro.url.searchParams.get('error');
     <p style="color:var(--on-bg-muted);margin-top:-8px; text-align: center;">Monitor :)</p>
 
     {error && <div class="alert error">{error}</div>}
+    {ok && <div class="alert ok">{ok}</div>}
 
     <form method="POST" action="/api/auth/login" class="card" style="margin-top:20px">
       <div class="field">
@@ -20,6 +22,9 @@ const error = Astro.url.searchParams.get('error');
         <input type="password" id="password" name="password" required />
       </div>
       <button type="submit" class="btn" style="width:100%;justify-content:center">Entrar</button>
+      <p style="margin:14px 0 0;text-align:center;font-size:0.85rem">
+        <a href="/admin/olvide-contrasena">¿Olvidaste tu contraseña?</a>
+      </p>
     </form>
   </div>
 </Layout>

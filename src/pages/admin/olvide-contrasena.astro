@@ -1,0 +1,30 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const error = Astro.url.searchParams.get('error');
+const ok = Astro.url.searchParams.get('ok');
+---
+<Layout title="Recuperar contraseña · Admin">
+  <div class="shell" style="max-width:400px;padding-top:80px">
+    <h1>Recuperar contraseña</h1>
+    <p style="color:var(--on-bg-muted);margin-top:-8px">Te enviaremos un enlace a tu correo</p>
+
+    {error && <div class="alert error">{error}</div>}
+    {ok && (
+      <div class="alert ok">
+        Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.
+        Revisa también la carpeta de spam. El enlace caduca en 1 hora.
+      </div>
+    )}
+
+    <form method="POST" action="/api/auth/forgot" class="card" style="margin-top:20px">
+      <div class="field">
+        <label for="email">Correo</label>
+        <input type="email" id="email" name="email" required autofocus />
+      </div>
+      <button type="submit" class="btn" style="width:100%;justify-content:center">Enviar enlace</button>
+    </form>
+
+    <p style="font-size:0.85rem;margin-top:16px"><a href="/admin/login">← Volver a ingresar</a></p>
+  </div>
+</Layout>

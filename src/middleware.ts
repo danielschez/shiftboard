@@ -35,7 +35,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const path = context.url.pathname;
   const isApi = path.startsWith('/api/');
-  const needsSession = (path.startsWith('/admin') && path !== '/admin/login') || path.startsWith('/api/admin');
+  const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/olvide-contrasena'];
+  const needsSession = (path.startsWith('/admin') && !PUBLIC_ADMIN_PATHS.includes(path)) || path.startsWith('/api/admin');
 
   if (needsSession && !user) {
     if (isApi) {
